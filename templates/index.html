@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es" data-bs-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Inspección de tela · Detección de manchas</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+</head>
+<body>
+<header class="topbar">
+  <div class="container-xl d-flex align-items-center gap-3">
+    <span class="logo">▣</span>
+    <div>
+      <h1 class="h5 m-0">INSPECCIÓN DE TELA</h1>
+      <small class="text-secondary">Detección de manchas y defectos de color · CIELAB + ΔE CIEDE2000</small>
+    </div>
+  </div>
+</header>
+
+<main class="container-xl py-4">
+  <div class="row g-4">
+
+    <!-- Panel izquierdo: carga + ajustes -->
+    <section class="col-lg-4">
+      <div class="panel">
+        <h2 class="panel-title">1 · Foto de la prenda</h2>
+        <div id="dropzone" class="dropzone" tabindex="0">
+          <div class="dz-icon">⬆</div>
+          <div>Arrastra la foto aquí<br><small class="text-secondary">o toca para elegir (JPG / PNG)</small></div>
+        </div>
+        <input id="archivo" type="file" accept="image/jpeg,image/png" hidden>
+        <input id="camara" type="file" accept="image/*" capture="environment" hidden>
+        <div class="d-grid gap-2 mt-2">
+          <button id="btnCamara" class="btn btn-outline-secondary btn-sm" type="button">📷 Tomar foto con la cámara</button>
+        </div>
+        <p id="nombreArchivo" class="small text-secondary mt-2 mb-0"></p>
+        <p class="small text-secondary mt-2 mb-0">Mejor resultado: prenda plana, de frente y llenando el cuadro.</p>
+      </div>
+
+      <div class="panel mt-4">
+        <h2 class="panel-title">2 · Ajustes <small class="text-secondary fw-normal">(los valores por defecto sirven para la mayoría)</small></h2>
+
+        <label class="form-label small mb-0" for="tol">Tolerancia ΔE <output id="o_tol" class="val">3.0</output></label>
+        <input id="tol" class="form-range" type="range" min="1.5" max="10" step="0.5" value="3">
+        <div class="hint">Una zona es defecto si su diferencia de color promedio supera esto.</div>
+
+        <label class="form-label small mb-0 mt-3" for="z_thr">Sensibilidad <output id="o_z_thr" class="val">4.0</output></label>
+        <input id="z_thr" class="form-range" type="range" min="3" max="8" step="0.5" value="4">
+        <div class="hint">Más bajo = detecta más. Útil entre 3 y 5.</div>
+
+        <label class="form-label small mb-0 mt-3" for="min_area">Área mínima % <output id="o_min_area" class="val">0.05</output></label>
+        <input id="min_area" class="form-range" type="range" min="0.01" max="2" step="0.01" value="0.05">
+        <div class="hint">Baja si no ve defectos chicos; sube si hay muchos puntitos.</div>
+
+        <label class="form-label small mb-0 mt-3" for="max_side">Resolución de trabajo</label>
+        <select id="max_side" class="form-select form-select-sm">
+          <option>480</option><option selected>640</option><option>800</option><option>1024</option>
+        </select>
+
+        <div class="mt-3">
+          <div class="form-check"><input class="form-check-input" type="checkbox" id="fondo" checked><label class="form-check-label small" for="fondo">Separar la prenda de un fondo liso (fotos de catálogo)</label></div>
+          <div class="form-check"><input class="form-check-input" type="checkbox" id="boost" checked><label class="form-check-label small" for="boost">Reforzar manchas claras en tela oscura</label></div>
+          <div class="form-check"><input class="form-check-input" type="checkbox" id="sombras" checked><label class="form-check-label small" for="sombras">Filtrar sombras y arrugas</label></div>
+          <div class="form-check"><input class="form-check-input" type="checkbox" id="estampados" checked><label class="form-check-label small" for="estampados">Filtrar estampados repetidos</label></div>
+          <div class="form-check"><input class="form-check-input" type="checkbox" id="piel" checked><label class="form-check-label small" for="piel">Ignorar piel (manos, brazos)</label></div>
+          <div class="form-check"><input class="form-check-input" type="checkbox" id="paleta"><label class="form-check-label small" for="paleta">Prenda con estampado grande (usar paleta)</label></div>
+          <div class="form-check d-none" id="cnnWrap"><input class="form-check-input" type="checkbox" id="cnn"><label class="form-check-label small" for="cnn">Usar CNN ligera</label></div>
+        </div>
+        <div class="hint">La paleta solo es para bloques grandes de color; apágala en telas lisas.</div>
+
+        <details class="mt-3">
+          <summary class="small">Recortar bordes (quita manos, mangas, pared)</summary>
+          <div class="mt-2">
+            <label class="form-label small mb-0" for="crop_izq">Izquierda % <output id="o_crop_izq" class="val">0</output></label>
+            <input id="crop_izq" class="form-range" type="range" min="0" max="45" step="1" value="0">
+            <label class="form-label small mb-0" for="crop_der">Derecha % <output id="o_crop_der" class="val">0</output></label>
+            <input id="crop_der" class="form-range" type="range" min="0" max="45" step="1" value="0">
+            <label class="form-label small mb-0" for="crop_arr">Arriba % <output id="o_crop_arr" class="val">0</output></label>
+            <input id="crop_arr" class="form-range" type="range" min="0" max="45" step="1" value="0">
+            <label class="form-label small mb-0" for="crop_aba">Abajo % <output id="o_crop_aba" class="val">0</output></label>
+            <input id="crop_aba" class="form-range" type="range" min="0" max="45" step="1" value="0">
+          </div>
+        </details>
+
+        <div class="d-grid mt-3">
+          <button id="btnAnalizar" class="btn btn-amber" type="button" disabled>ANALIZAR</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Panel derecho: resultados -->
+    <section class="col-lg-8">
+      <div id="vacio" class="panel empty">
+        <div class="display-6">▣</div>
+        <p class="mb-0">Sube una foto para ver las zonas fuera de tolerancia.</p>
+      </div>
+
+      <div id="cargando" class="panel text-center d-none">
+        <div class="spinner-border text-warning" role="status"></div>
+        <p class="mt-3 mb-0">Analizando…</p>
+      </div>
+
+      <div id="error" class="alert alert-danger d-none" role="alert"></div>
+
+      <div id="resultados" class="d-none">
+        <div id="veredicto" class="verdict"></div>
+        <div id="tagFondo" class="small text-secondary text-center mt-1"></div>
+
+        <div class="row g-3 my-1">
+          <div class="col-4"><div class="metric"><div class="metric-n" id="m_total">0</div><div class="metric-l">Defectos</div></div></div>
+          <div class="col-4"><div class="metric"><div class="metric-n" id="m_area">0%</div><div class="metric-l">Área dañada</div></div></div>
+          <div class="col-4"><div class="metric"><div class="metric-n" id="m_tiempo">0</div><div class="metric-l">Tiempo (ms)</div></div></div>
+        </div>
+
+        <div class="row g-3 mt-1">
+          <div class="col-md-4"><figure class="shot"><img id="img_original" alt="Zona analizada"><figcaption>Zona analizada</figcaption></figure></div>
+          <div class="col-md-4"><figure class="shot"><img id="img_marcada" alt="Zonas fuera de tolerancia"><figcaption>Zonas fuera de tolerancia</figcaption></figure></div>
+          <div class="col-md-4"><figure class="shot"><img id="img_heatmap" alt="Mapa de anomalía"><figcaption>Mapa de anomalía (rojo = más raro)</figcaption></figure></div>
+        </div>
+
+        <div class="panel mt-3" id="tablaWrap">
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h2 class="panel-title m-0">Detalle de defectos</h2>
+            <div class="d-flex gap-2">
+              <a id="dlPng" class="btn btn-outline-secondary btn-sm" download="resultado.jpg">Descargar imagen marcada</a>
+              <button id="dlCsv" class="btn btn-outline-secondary btn-sm" type="button">Descargar CSV</button>
+            </div>
+          </div>
+          <div class="table-responsive mt-2">
+            <table class="table table-sm align-middle mb-0">
+              <thead><tr><th>#</th><th>x</th><th>y</th><th>ancho</th><th>alto</th><th>área %</th><th>ΔE medio</th><th>ΔE máx</th><th>tipo</th><th>nivel</th></tr></thead>
+              <tbody id="tbody"></tbody>
+            </table>
+          </div>
+          <p class="hint mt-2 mb-0">Coordenadas en píxeles de la imagen analizada.</p>
+        </div>
+
+        <details class="panel mt-3">
+          <summary>¿Cómo leer el resultado?</summary>
+          <ul class="small mt-2 mb-0">
+            <li><b>Recuadro rojo</b> = defecto grave (ΔE medio &gt; 2 × tolerancia). <b>Naranja</b> = leve.</li>
+            <li><b>Línea amarilla</b> = contorno exacto de la zona detectada.</li>
+            <li><b>ΔE</b> = diferencia de color (CIEDE2000) de la zona contra el color normal de la tela.</li>
+            <li><b>Mapa de anomalía</b> = qué tan rara es cada parte; los recuadros salen de ahí.</li>
+            <li>Si no detecta algo visible, baja la <b>Sensibilidad</b> o el <b>Área mínima</b>. Si marca de más, súbelos o recorta los bordes.</li>
+          </ul>
+        </details>
+      </div>
+    </section>
+  </div>
+</main>
+
+<div id="lightbox" class="lightbox d-none"><img alt="Vista ampliada"></div>
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
